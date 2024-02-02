@@ -4,6 +4,7 @@ import { Auth } from "./components/Auth.js";
 import { AppWrapper } from "./components/AppWrapper";
 import Cookies from "universal-cookie";
 import "./App.css";
+import Notification from "./components/Notification.js";
 
 const cookies = new Cookies();
 
@@ -41,7 +42,7 @@ function ChatApp() {
           </button>
         </div>
       ) : (
-        <Chat room={room} />
+        <><Chat room={room} /><Notification room={room}/></>
       )}
     </AppWrapper>
   );

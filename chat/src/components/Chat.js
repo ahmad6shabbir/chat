@@ -1,13 +1,55 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp, where } from 'firebase/firestore';
-import { auth, db } from '../firebase-config';
+import { addDoc, collection, getDocs, onSnapshot, orderBy, query, serverTimestamp, where } from 'firebase/firestore';
+import { auth, db, requestForToken } from '../firebase-config';
 import moment from 'moment';
 
 export const Chat = ({ room }) => {
     const [newMessages, setNewMessages] = useState("");
     const [messages, setMessages] = useState([]);
     const messageRef = collection(db, "messages");
+    const userRef = collection(db, "users");
     const messagesContainerRef = useRef(null);
+    let fcmKey; // Declare fcmKey outside the scope of the promise chain
+
+    const fcmKeyPromise = requestForToken();
+
+    fcmKeyPromise
+        .then((resolvedFcmKey) => {
+            // Now you can use the resolvedFcmKey here
+            fcmKey = resolvedFcmKey;
+            console.log(fcmKey);
+        })
+        .catch((error) => {
+            // Handle any errors that may have occurred during the Promise
+            console.error(error);
+        });
+    const addUser = async () => {
+        // Wait for the fcmKeyPromise to resolve
+        const resolvedFcmKey = await fcmKeyPromise;
+
+        const userSnapshot = await getDocs(query(
+            userRef,
+            where('user', '==', auth.currentUser.uid),
+            where('room', '==', room)
+        ));
+
+        console.log(userSnapshot);
+
+        if (userSnapshot.empty) {
+            // User does not exist in the room, proceed to add the document
+            await addDoc(userRef, {
+                createdAt: serverTimestamp(),
+                user: auth.currentUser.uid,
+                key: 12,
+                room,
+                fcmKey: resolvedFcmKey, // Add the fcmKey here
+            });
+
+            console.log('User added successfully.');
+        } else {
+            console.log('User already exists in the room.');
+        }
+    };
 
     useEffect(() => {
         const queryMessages = query(
@@ -15,7 +57,6 @@ export const Chat = ({ room }) => {
             where("room", "==", room),
             orderBy("createdAt")
         );
-
         const subscribe = onSnapshot(queryMessages, (snapshot) => {
             let messages = [];
             snapshot.forEach((doc) => {
@@ -28,6 +69,7 @@ export const Chat = ({ room }) => {
     }, [room]);
 
     useEffect(() => {
+        addUser();
         // Scroll to the end of the messages when the messages state is updated
         if (messagesContainerRef.current) {
             messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
@@ -74,7 +116,7 @@ export const Chat = ({ room }) => {
                                 key={message.id}
                                 className={`message ${isCurrentUser(message.user) ? 'current-user' : 'other-user'}`}
                             >
-                                <span className='user'>{message.user}</span><hr style={{margin:0}}/>
+                                <span className='user'>{message.user}</span><hr style={{ margin: 0 }} />
                                 <div className='user_message'>{message.Text}</div>
                                 <span className='timestamp'>{formatTimestamp(message.createdAt)}</span>
                             </div>
